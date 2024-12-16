@@ -1,10 +1,13 @@
-import streamlit as st
+# 기본 라이브러리
+import os
 import json
+import time
+from collections import defaultdict
+
+# 외부 라이브러리
+import streamlit as st
 import requests
 import numpy as np
-from collections import defaultdict
-import os
-import time
 import pandas as pd
 import plotly.express as px
 
