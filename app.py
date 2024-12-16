@@ -66,17 +66,22 @@ def call_api(model, prompt, api_key):
                 "max_tokens": 100
             }
         elif model == "claude":
-            url = "https://api.anthropic.com/v1/complete"
+            url = "https://api.anthropic.com/v1/messages"
             headers = {
                 "x-api-key": api_key,
-                "Content-Type": "application/json",
-                "anthropic-version": "2023-06-01"
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json"
             }
             payload = {
-                "model": "claude-instant-1",
-                "prompt": f"\n\nHuman: {prompt}\n\nAssistant:",
-                "temperature": 1,
-                "max_tokens_to_sample": 100
+                "model": "claude-3-opus-20240229",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "max_tokens": 100,
+                "temperature": 1
             }
         elif model == "gemini":
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={api_key}"
@@ -84,11 +89,11 @@ def call_api(model, prompt, api_key):
                 "Content-Type": "application/json"
             }
             payload = {
-                "contents": [{"parts":[{"text": prompt}]}],
-                "generationConfig": {
-                    "temperature": 1,
-                    "maxOutputTokens": 100
-                }
+                "contents": [{
+                    "parts":[{
+                        "text": prompt
+                    }]
+                }]
             }
         
         response = requests.post(url, json=payload, headers=headers, timeout=10)
@@ -98,7 +103,7 @@ def call_api(model, prompt, api_key):
         if model == "openai":
             return {"choices": [{"text": response.json()["choices"][0]["message"]["content"]}]}
         elif model == "claude":
-            return {"choices": [{"text": response.json()["completion"]}]}
+            return {"choices": [{"text": response.json()["content"][0]["text"]}]}
         elif model == "gemini":
             return {"choices": [{"text": response.json()["candidates"][0]["content"]["parts"][0]["text"]}]}
             
@@ -121,7 +126,7 @@ def prepare_prompt(question, option1, option2, template="A/B"):
         else:
             return f"Question: {question}\n(A) {option1}\n(B) {option2}\nAnswer:"
     except Exception as e:
-        st.error(f"프롬프트 준비 중 오류 발생: {str(e)}")
+        st.error(f"프롬프트 준비 중 오��� 발생: {str(e)}")
         return ""
 
 # 방향성 가능성 계산 - 에러 처리 포함
