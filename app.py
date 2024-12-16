@@ -45,74 +45,114 @@ def load_questions(filepath="CDEval.json"):
         return []
 
 # API 호출을 위한 헬퍼 함수 - 개선된 에러 처리 포함
-def call_api(model, prompt, api_key):
-    try:
-        if not api_key:
-            return {"choices": [{"text": "API 키가 제공되지 않았습니다"}]}
+def call_api(model, prompt, api_key, max_retries=3, delay=1):
+    for attempt in range(max_retries):
+        try:
+            if not api_key:
+                return {"choices": [{"text": "API 키가 제공되지 않았습니다"}]}
 
-        if model == "openai":
-            url = "https://api.openai.com/v1/chat/completions"
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            }
-            payload = {
-                "model": "gpt-4",
-                "messages": [
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": prompt}
-                ],
-                "temperature": 1,
-                "max_tokens": 100
-            }
-        elif model == "claude":
-            url = "https://api.anthropic.com/v1/messages"
-            headers = {
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json"
-            }
-            payload = {
-                "model": "claude-3-opus-20240229",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                "max_tokens": 100,
-                "temperature": 1
-            }
-        elif model == "gemini":
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={api_key}"
-            headers = {
-                "Content-Type": "application/json"
-            }
-            payload = {
-                "contents": [{
-                    "parts":[{
-                        "text": prompt
+            if model == "gemini":
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={api_key}"
+                headers = {
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "contents": [{
+                        "parts":[{
+                            "text": prompt
+                        }]
                     }]
-                }]
-            }
-        
-        response = requests.post(url, json=payload, headers=headers, timeout=10)
-        response.raise_for_status()
-        
-        # Handle different API response formats
-        if model == "openai":
-            return {"choices": [{"text": response.json()["choices"][0]["message"]["content"]}]}
-        elif model == "claude":
-            return {"choices": [{"text": response.json()["content"][0]["text"]}]}
-        elif model == "gemini":
-            return {"choices": [{"text": response.json()["candidates"][0]["content"]["parts"][0]["text"]}]}
+                }
+                
+                # 요청 간 딜레이 추가
+                if attempt > 0:
+                    time.sleep(delay * (attempt + 1))  # 점진적으로 딜레이 증가
+                
+                response = requests.post(url, json=payload, headers=headers, timeout=10)
+                
+                if response.status_code == 429:  # Too Many Requests
+                    if attempt < max_retries - 1:
+                        continue  # 재시도
+                    else:
+                        return {"choices": [{"text": "API 요청 한도 초과. 잠시 후 다시 시도해주세요."}]}
+                
+                response.raise_for_status()
+                return {"choices": [{"text": response.json()["candidates"][0]["content"]["parts"][0]["text"]}]}
+                
+            elif model == "claude":
+                url = "https://api.anthropic.com/v1/messages"
+                headers = {
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": "claude-3-opus-20240229",
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    "max_tokens": 100,
+                    "temperature": 1
+                }
+                
+                # 요청 간 딜레이 추가
+                if attempt > 0:
+                    time.sleep(delay * (attempt + 1))  # 점진적으로 딜레이 증가
+                
+                response = requests.post(url, json=payload, headers=headers, timeout=10)
+                
+                if response.status_code == 429:  # Too Many Requests
+                    if attempt < max_retries - 1:
+                        continue  # 재시도
+                    else:
+                        return {"choices": [{"text": "API 요청 한도 초과. 잠시 후 다시 시도해주세요."}]}
+                
+                response.raise_for_status()
+                return {"choices": [{"text": response.json()["content"][0]["text"]}]}
             
-    except requests.exceptions.RequestException as e:
-        st.error(f"API call failed for {model}: {str(e)}")
-        return {"choices": [{"text": f"Error: {str(e)}"}]}
-    except Exception as e:
-        st.error(f"Unexpected error for {model}: {str(e)}")
-        return {"choices": [{"text": "Error occurred"}]}
+            elif model == "openai":
+                url = "https://api.openai.com/v1/chat/completions"
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": "gpt-4",
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 1,
+                    "max_tokens": 100
+                }
+                
+                # 요청 간 딜레이 추가
+                if attempt > 0:
+                    time.sleep(delay * (attempt + 1))  # 점진적으로 딜레이 증가
+                
+                response = requests.post(url, json=payload, headers=headers, timeout=10)
+                
+                if response.status_code == 429:  # Too Many Requests
+                    if attempt < max_retries - 1:
+                        continue  # 재시도
+                    else:
+                        return {"choices": [{"text": "API 요청 한도 초과. 잠시 후 다시 시도해주세요."}]}
+                
+                response.raise_for_status()
+                return {"choices": [{"text": response.json()["choices"][0]["message"]["content"]}]}
+                
+        except requests.exceptions.RequestException as e:
+            if attempt < max_retries - 1:
+                time.sleep(delay * (attempt + 1))
+                continue
+            st.error(f"API call failed for {model}: {str(e)}")
+            return {"choices": [{"text": f"Error: {str(e)}"}]}
+        except Exception as e:
+            st.error(f"Unexpected error for {model}: {str(e)}")
+            return {"choices": [{"text": "Error occurred"}]}
 
 # 질문 프롬프트 준비
 def prepare_prompt(question, option1, option2, template="A/B"):
@@ -126,7 +166,7 @@ def prepare_prompt(question, option1, option2, template="A/B"):
         else:
             return f"Question: {question}\n(A) {option1}\n(B) {option2}\nAnswer:"
     except Exception as e:
-        st.error(f"프롬프트 준비 중 오��� 발생: {str(e)}")
+        st.error(f"프롬프트 준비 중 오류 발생: {str(e)}")
         return ""
 
 # 방향성 가능성 계산 - 에러 처리 포함
