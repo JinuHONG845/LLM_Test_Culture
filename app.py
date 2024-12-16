@@ -4,6 +4,9 @@ import requests
 import numpy as np
 from collections import defaultdict
 import os
+import time
+import pandas as pd
+import plotly.express as px
 
 # 결과를 위한 세션 상태 초기화
 if 'results' not in st.session_state:
@@ -17,7 +20,8 @@ def get_api_keys():
             "claude": st.secrets["CLAUDE_API_KEY"],
             "gemini": st.secrets["GEMINI_API_KEY"]
         }
-    except Exception:
+    except Exception as e:
+        st.error(f"API 키 로드 중 오류 발생: {str(e)}")
         return None
 
 # CDEval.json 파일 로드 - 에러 처리 포함
@@ -179,34 +183,94 @@ def evaluate_model(model_name, api_key):
 # 스트림릿 UI
 st.title("LLM 문화적 차원 평가")
 
-# API 키 입력을 위한 사이드바
-st.sidebar.title("API 키 입력")
-openai_api_key = st.sidebar.text_input("OpenAI API 키", type="password")
-claude_api_key = st.sidebar.text_input("Claude API 키", type="password")
-gemini_api_key = st.sidebar.text_input("Gemini API 키", type="password")
+# 결과를 표시할 컨테이너 생성
+result_container = st.container()
+
+# 진행 상황을 표시할 컨테이너 생성
+progress_container = st.container()
 
 # 평가 버튼
-if st.sidebar.button("평가 시작"):
+if st.button("평가 시작"):
     st.session_state.results = {}
+    api_keys = get_api_keys()
     
-    if not (openai_api_key and claude_api_key and gemini_api_key):
-        st.warning("모든 API 키를 입력해주세요")
+    if not api_keys:
+        st.warning("API 키 설정을 확인해주세요")
     else:
         try:
-            with st.spinner("OpenAI 평가 중..."):
-                st.session_state.results["OpenAI"] = evaluate_model("openai", openai_api_key)
-            with st.spinner("Claude 평가 중..."):
-                st.session_state.results["Claude"] = evaluate_model("claude", claude_api_key)
-            with st.spinner("Gemini 평가 중..."):
-                st.session_state.results["Gemini"] = evaluate_model("gemini", gemini_api_key)
-            
-            st.success("평가 완료!")
-            st.write("결과:")
-            st.json(st.session_state.results)
+            # Gemini 평가
+            with progress_container:
+                st.subheader("Gemini 평가 진행중...")
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                for i in range(10):
+                    status_text.text(f"질문 {i+1}/10 처리중...")
+                    progress_bar.progress((i + 1) * 10)
+                    time.sleep(0.1)
+                
+                st.session_state.results["Gemini"] = evaluate_model("gemini", api_keys["gemini"])
+                st.success("Gemini 평가 완료!")
+
+            # Claude 평가
+            with progress_container:
+                st.subheader("Claude 평가 진행중...")
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                for i in range(10):
+                    status_text.text(f"질문 {i+1}/10 처리중...")
+                    progress_bar.progress((i + 1) * 10)
+                    time.sleep(0.1)
+                
+                st.session_state.results["Claude"] = evaluate_model("claude", api_keys["claude"])
+                st.success("Claude 평가 완료!")
+
+            # OpenAI(ChatGPT) 평가
+            with progress_container:
+                st.subheader("ChatGPT (GPT-4) 평가 진행중...")
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                for i in range(10):
+                    status_text.text(f"질문 {i+1}/10 처리중...")
+                    progress_bar.progress((i + 1) * 10)
+                    time.sleep(0.1)
+                
+                st.session_state.results["ChatGPT"] = evaluate_model("openai", api_keys["openai"])
+                st.success("ChatGPT 평가 완료!")
+
+            # 최종 결과 표시
+            with result_container:
+                st.subheader("평가 결과")
+                
+                # 각 모델별 결과를 탭으로 구분하여 표시 (순서 변경)
+                tabs = st.tabs(["Gemini", "Claude", "ChatGPT"])
+                
+                # 결과 표시 순서도 변경
+                models_order = ["Gemini", "Claude", "ChatGPT"]
+                for idx, (model, tab) in enumerate(zip(models_order, tabs)):
+                    with tab:
+                        st.write(f"### {model} 결과")
+                        
+                        # 차원별 결과 표시
+                        for dimension, data in st.session_state.results[model].items():
+                            st.write(f"#### {dimension}")
+                            
+                            # 템플릿별 결과를 표로 표시
+                            for template, results in data.items():
+                                st.write(f"**템플릿: {template}**")
+                                df = pd.DataFrame(results)
+                                st.dataframe(df)
+                                
+                                # 가능성 시각화
+                                fig = px.bar(
+                                    x=['Option 1', 'Option 2'],
+                                    y=[np.mean([r['likelihood_option1'] for r in results]),
+                                       np.mean([r['likelihood_option2'] for r in results])],
+                                    title=f"{dimension} - {template} 응답 경향"
+                                )
+                                st.plotly_chart(fig)
+
         except Exception as e:
             st.error(f"평가 실패: {str(e)}")
-
-# 이전 결과가 있다면 표시
-if st.session_state.results:
-    st.write("이전 결과:")
-    st.json(st.session_state.results)
