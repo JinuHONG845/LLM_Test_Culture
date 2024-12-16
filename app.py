@@ -66,7 +66,8 @@ def call_api(model, prompt, api_key):
             url = "https://api.anthropic.com/v1/complete"
             headers = {
                 "x-api-key": api_key,
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "anthropic-version": "2023-06-01"
             }
             payload = {
                 "model": "claude-instant-1",
@@ -75,9 +76,8 @@ def call_api(model, prompt, api_key):
                 "max_tokens_to_sample": 100
             }
         elif model == "gemini":
-            url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro/generateContent"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={api_key}"
             headers = {
-                "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json"
             }
             payload = {
